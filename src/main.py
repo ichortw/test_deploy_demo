@@ -75,7 +75,13 @@ def fetch_ip_address():
         except Exception as exc:
             print(f"取得 IP 位址時發生錯誤 (標準庫): {exc}", file=sys.stderr)
 
+def get_version() -> str:
+    """取得當前程式版本號。"""
+    return "v1.1.0"
+
 def main():
+    version = get_version()
+    print(f"程式版本: {version}")
     print("chortw coder 運作正常！")
     display_current_time()
     fetch_ip_address()
