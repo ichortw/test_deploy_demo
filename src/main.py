@@ -1,90 +1,81 @@
-import os
 import sys
-from datetime import datetime
+from typing import Dict, List
+from config import config
+from network import fetch_ip_address
+from utils import format_time, list_bat_files, list_python_files, list_sh_files
 
-# 嘗試載入 python-dotenv，若未安裝則提供降級處理並輸出警示
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    print("[WARN] 未安裝 'python-dotenv' 套件。請確認已啟動虛擬環境或執行 'pip install -r requirements.txt'。", file=sys.stderr)
-    # 簡易讀取同專案目錄或當前目錄下的 .env 作為備用支援
-    env_file_candidates = [
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"),
-        os.path.join(os.getcwd(), ".env")
-    ]
-    for env_path in env_file_candidates:
-        if os.path.exists(env_path):
-            try:
-                with open(env_path, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith("#") and "=" in line:
-                            key, val = line.split("=", 1)
-                            os.environ.setdefault(key.strip(), val.strip())
-            except Exception as e:
-                print(f"[WARN] 讀取 .env 檔案失敗: {e}", file=sys.stderr)
-            break
-
-# 嘗試載入 requests
-try:
-    import requests
-except ImportError:
-    requests = None
-    print("[WARN] 未安裝 'requests' 套件，將降級使用標準庫 urllib.request。", file=sys.stderr)
-    import json
-    import urllib.request
-    import urllib.error
-
-IP_API_URL = os.getenv("IP_API_URL", "https://api.ipify.org?format=json")
-REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "10"))
-DATETIME_FORMAT = os.getenv("DATETIME_FORMAT", "%Y-%m-%d %H:%M:%S")
 
 def display_current_time() -> str:
-    """讀取系統當前時間並依照設定格式印出，並回傳格式化字串。"""
-    now = datetime.now()
-    formatted_time = now.strftime(DATETIME_FORMAT)
+    """透過 utils.format_time 取得格式化時間並印出，同時回傳字串。"""
+    formatted_time = format_time()
     print(f"系統當前時間: {formatted_time}")
     return formatted_time
 
-def fetch_ip_address():
-    """透過外部服務取得當前公網 IP 位址並印出。"""
-    if requests:
-        try:
-            response = requests.get(IP_API_URL, timeout=REQUEST_TIMEOUT)
-            response.raise_for_status()
-            data = response.json()
-            ip = data.get("ip") or data.get("origin")
-            if ip:
-                print(f"目前外部 IP 位址: {ip}")
-            else:
-                print(f"無法解析 IP 位址，回應內容: {response.text}")
-        except requests.exceptions.RequestException as exc:
-            print(f"取得 IP 位址時發生錯誤: {exc}", file=sys.stderr)
-    else:
-        try:
-            req = urllib.request.Request(IP_API_URL, headers={"User-Agent": "Python-urllib"})
-            with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
-                body = resp.read().decode("utf-8")
-                data = json.loads(body)
-                ip = data.get("ip") or data.get("origin")
-                if ip:
-                    print(f"目前外部 IP 位址: {ip}")
-                else:
-                    print(f"無法解析 IP 位址，回應內容: {body}")
-        except Exception as exc:
-            print(f"取得 IP 位址時發生錯誤 (標準庫): {exc}", file=sys.stderr)
 
-def get_version() -> str:
-    """取得當前程式版本號。"""
-    return "v1.1.0"
+def display_python_files() -> List[str]:
+    """掃描並顯示專案內所有 .py 檔案數量與清單，同時回傳清單。"""
+    py_files = list_python_files()
+    print(f"專案 .py 檔案總數: {len(py_files)}")
+    for idx, file_path in enumerate(py_files, start=1):
+        print(f"  {idx}. {file_path}")
+    return py_files
 
-def main():
-    version = get_version()
-    print(f"程式版本: {version}")
-    print("chortw coder 運作正常！")
+
+def display_deploy_scripts() -> Dict[str, List[str]]:
+    """掃描並顯示專案內所有 .bat 與 .sh 檔案數量與清單，同時回傳統計字典。"""
+    bat_files = list_bat_files()
+    print(f"專案 .bat 檔案總數: {len(bat_files)}")
+    for idx, file_path in enumerate(bat_files, start=1):
+        print(f"  {idx}. {file_path}")
+
+    sh_files = list_sh_files()
+    print(f"專案 .sh 檔案總數: {len(sh_files)}")
+    for idx, file_path in enumerate(sh_files, start=1):
+        print(f"  {idx}. {file_path}")
+
+    return {".bat": bat_files, ".sh": sh_files}
+
+
+def run_workflow() -> bool:
+    """
+    執行核心業務流程：
+    1. 顯示系統時間
+    2. 列出專案中的 .py 檔案數量與清單
+    3. 列出專案中的 .bat 與 .sh 檔案數量與清單
+    4. 取得並顯示外部公網 IP
+    :return: 流程是否完整成功
+    """
     display_current_time()
-    fetch_ip_address()
+    display_python_files()
+    display_deploy_scripts()
+    ip_addr = fetch_ip_address()
+    return ip_addr is not None
+
+
+def main() -> int:
+    """
+    主程式進入點：
+    負責初始化系統狀態、顯示環境配置，並調用各模組功能。
+    :return: 系統退出狀態碼 (Exit Code)
+    """
+    try:
+        print(f"[INFO] 程式版本: {config.app_version}")
+        print("[INFO] chortw coder 運作正常！")
+
+        # 顯示當前配置之模型資訊與思考預算
+        print(f"[INFO] 模型代號: {config.model_name} | 思考預算設定: {config.thinking_budget}")
+
+        success = run_workflow()
+        if not success:
+            print("[WARN] 部分網路檢測流程未能順利取得結果，請檢查網路連線。", file=sys.stderr)
+        return 0
+    except KeyboardInterrupt:
+        print("\n[WARN] 接收到中斷訊號，程式即將結束。", file=sys.stderr)
+        return 130
+    except Exception as e:
+        print(f"[ERROR] 程式執行期間發生未預期錯誤: {e}", file=sys.stderr)
+        return 1
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
